@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SnackClub - Log In</title>
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --text-muted: #94a3b8; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: var(--card); padding: 30px; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        h2 { margin-top: 0; font-size: 22px; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-muted); }
+        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; box-sizing: border-box; font-size: 15px; }
+        input:focus { border-color: var(--accent); outline: none; }
+        .method-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { flex: 1; padding: 10px; background: #334155; border: none; color: var(--text-muted); border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .tab.active { background: var(--accent); color: #0f172a; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        button.action-btn { width: 100%; padding: 12px; background: var(--accent); color: #0f172a; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; }
+        button.action-btn:disabled { background: #334155; color: var(--text-muted); cursor: not-allowed; }
+        .divider { text-align: center; margin: 20px 0; color: var(--text-muted); font-size: 14px; }
+        .google-btn { width: 100%; padding: 12px; background: white; color: #1e293b; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .status-msg { text-align: center; margin-top: 15px; font-size: 14px; min-height: 20px; font-weight: 500; }
+        .success { color: #4ade80; } .error { color: #f87171; } .info { color: var(--accent); }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+<div class="container">
+    <h2>🍿 Welcome Back</h2>
+
+    <div class="method-tabs">
+        <button class="tab active" onclick="switchLogin('email')">Email Login</button>
+        <button class="tab" onclick="switchLogin('phone')">Phone Login</button>
+    </div>
+
+    <div id="login-email" class="panel active">
+        <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="log-email" placeholder="name@example.com">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="log-pass" placeholder="••••••••">
+        </div>
+        <button class="action-btn" onclick="loginEmail()">Sign In</button>
+    </div>
+
+    <div id="login-phone" class="panel">
+        <div class="form-group">
+            <label>Phone Number (with country code)</label>
+            <input type="text" id="log-phone" placeholder="+14165550199">
+        </div>
+        <div id="recaptcha-container-login"></div>
+        <button class="action-btn" onclick="loginPhone()">Send Verification SMS</button>
+    </div>
+
+    <div class="divider">OR</div>
+    <button class="google-btn" onclick="loginGoogle()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/provider/google.svg" width="18" alt="Google"> Log In with Google
+    </button>
+
+    <div id="login-status" class="status-msg"></div>
+    <p style="text-align:center; font-size:13px; margin-top:20px; margin-bottom:0; color:var(--text-muted);">New here? <a href="signup.html" style="color:var(--accent);">Create an account</a></p>
+</div>
+
+<script>
+    // -------------------------------------------------------
+    // FIREBASE CONFIGURATION — replace with your real config
+    // -------------------------------------------------------
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container-login', { size: 'invisible' });
+
+    function switchLogin(m) {
+        document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i===0 && m==='email') || (i===1 && m==='phone')));
+        document.getElementById('login-email').classList.toggle('active', m === 'email');
+        document.getElementById('login-phone').classList.toggle('active', m === 'phone');
+    }
+
+    function loginEmail() {
+        const email = document.getElementById('log-email').value.trim();
+        const pass = document.getElementById('log-pass').value;
+        const status = document.getElementById('login-status');
+
+        if (!email || !pass) {
+            status.className = "status-msg error"; status.innerText = "Please enter your email and password."; return;
+        }
+
+        status.className = "status-msg info"; status.innerText = "Signing you in...";
+        auth.signInWithEmailAndPassword(email, pass)
+            .then(function(res) {
+                if (!res.user.emailVerified) {
+                    status.className = "status-msg error";
+                    status.innerText = "Please verify your email before logging in. Check your inbox!";
+                    auth.signOut();
+                } else {
+                    window.location.href = "dashboard.html";
+                }
+            })
+            .catch(function(e) {
+                status.className = "status-msg error"; status.innerText = e.message;
+            });
+    }
+
+    function loginPhone() {
+        const phone = document.getElementById('log-phone').value.trim();
+        const status = document.getElementById('login-status');
+
+        if (!phone) {
+            status.className = "status-msg error"; status.innerText = "Please enter your phone number."; return;
+        }
+
+        status.className = "status-msg info"; status.innerText = "Sending verification code...";
+        auth.signInWithPhoneNumber(phone, window.recaptchaVerifier)
+            .then(function(confirmationResult) {
+                const code = window.prompt("Enter the 6-digit code sent to your phone:");
+                confirmationResult.confirm(code)
+                    .then(function() { window.location.href = "dashboard.html"; })
+                    .catch(function() {
+                        status.className = "status-msg error"; status.innerText = "Incorrect code. Please try again.";
+                    });
+            })
+            .catch(function(e) {
+                status.className = "status-msg error"; status.innerText = e.message;
+            });
+    }
+
+    function loginGoogle() {
+        const status = document.getElementById('login-status');
+        status.className = "status-msg info"; status.innerText = "Opening Google sign-in...";
+        const provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithPopup(provider)
+            .then(function() { window.location.href = "dashboard.html"; })
+            .catch(function(e) {
+                status.className = "status-msg error"; status.innerText = e.message;
+            });
+    }
+</script>
+</body>
+</html>
